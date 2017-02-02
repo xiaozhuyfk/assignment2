@@ -38,8 +38,8 @@ void saxpyCuda(int N, float alpha, float* xarray, float* yarray, float* resultar
     // without being initialized.
     //
     cudaMalloc(&device_x, bufferSize);
-    cudatMalloc(&device_y, bufferSize);
-    cudaMalloc(&device_result, buffersize);
+    cudaMalloc(&device_y, bufferSize);
+    cudaMalloc(&device_result, bufferSize);
 
     // start timing after allocation of device memory.
     double startTime = CycleTimer::currentSeconds();
