@@ -68,3 +68,7 @@ objs/
 # saxpy
 saxpy/cudaSaxpy
 
+# scan
+scan/cudaScan
+scan/logs/
+
