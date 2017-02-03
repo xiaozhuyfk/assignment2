@@ -95,7 +95,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             length,
             twod,
             twod1);
-        cudaCheckError(cudaThreadSynchronize());
+        cudaThreadSynchronize();
     }
 
     printf("partial.\n");
