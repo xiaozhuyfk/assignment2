@@ -67,7 +67,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         int partitions = length / twod1;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
         int blocks = partitions / threads_per_block;
-        upsweep_kernel<<blocks, threads_per_block>>(
+        upsweep_kernel<<<blocks, threads_per_block>>>(
             device_result, 
             length,
             twod,
@@ -82,7 +82,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         int partitions = length / twod1;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
         int blocks = partitions / threads_per_block;
-        downsweep_kernel<<blocks, threads_per_block>>(
+        downsweep_kernel<<<blocks, threads_per_block>>>(
             device_result,
             length,
             twod,
