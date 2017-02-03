@@ -141,6 +141,7 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     int rounded_length = nextPow2(end - inarray);
     cudaMalloc((void **)&device_result, sizeof(int) * rounded_length);
     cudaMalloc((void **)&device_input, sizeof(int) * rounded_length);
+    cudaMemset(device_result, 0, rounded_length);
     cudaMemcpy(device_input, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
 
