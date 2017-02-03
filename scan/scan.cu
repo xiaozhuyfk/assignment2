@@ -58,7 +58,8 @@ __global__ void upsweep_kernel(
     int i = index * twod1;
 
     device_result[i + twod1 - 1] += device_result[i + twod - 1];
-    printf("%d, %d, %d\n", i, twod, twod1);
+    printf("%d, %d, %d, %d, %d\n", i, i+twod-1, i+twod1-1, 
+        device_result[i+twod1-1], device_result[i+twod-1]);
 }
 
 __global__ void downsweep_kernel(
