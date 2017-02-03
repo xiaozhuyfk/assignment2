@@ -98,6 +98,11 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         cudaCheckError(cudaThreadSynchronize());
     }
 
+    printf("partial.\n");
+    for (int i = 0; i < length; i++) {
+        printf("%d\n", device_result[i]);
+    }
+
     //cudaMemset(device_result + length - 1, 0, 1);
 
     /*
