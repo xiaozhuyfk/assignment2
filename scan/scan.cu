@@ -135,13 +135,9 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     // You may have an easier time in your implementation if you assume the 
     // array's length is a power of 2, but this will result in extra work on
     // non-power-of-2 inputs.
-    for (int i = 0; i < end - inarray; i++) {
-        printf("%d\n", inarray[i]);
-    }
     int rounded_length = nextPow2(end - inarray);
     cudaMalloc((void **)&device_result, sizeof(int) * rounded_length);
     cudaMalloc((void **)&device_input, sizeof(int) * rounded_length);
-    cudaMemset(device_result, 0, rounded_length);
     cudaMemcpy(device_input, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
 
@@ -150,8 +146,12 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     // implement an in-place scan on the result vector if you wish.
     // If you do this, you will need to keep that fact in mind when calling
     // exclusive_scan from find_repeats.
+    cudaMemset(device_result, 0, rounded_length);
     cudaMemcpy(device_result, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
+    for (int i = 0; i < rounded_length; i++) {
+        printf("%d\n", device_result[i]);
+    }
 
     double startTime = CycleTimer::currentSeconds();
 
