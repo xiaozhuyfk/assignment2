@@ -54,11 +54,11 @@ __global__ void upsweep_kernel(
     int twod, 
     int twod1) {
 
-    printf("really?\n");
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int i = index * twod1;
-    printf("%d\n", i);
+
     device_result[i + twod1 - 1] += device_result[i + twod - 1];
+    printf("%d\n", device_result[i + twod - 1]);
 }
 
 __global__ void downsweep_kernel(
@@ -85,7 +85,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
      * power of 2 larger than the input.
      */
     
-    for (int twod = 1; twod < length; twod *= 2) {
+    for (int twod = 1; twod < length / 2; twod *= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
