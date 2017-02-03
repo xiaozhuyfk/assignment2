@@ -143,11 +143,9 @@ int main(int argc, char** argv)
     if (test.compare("scan") == 0) { // test exclusive scan
         // run CUDA implementation
         for (int i=0; i<3; i++) {
-            printf("here?");
             if (useThrust)
                 cudaTime = std::min(cudaTime, cudaScanThrust(inarray, inarray+N, resultarray));
             else {
-                printf("what\n");
                 cudaTime = std::min(cudaTime, cudaScan(inarray, inarray+N, resultarray));
             }
         }
