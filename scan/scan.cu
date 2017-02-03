@@ -82,8 +82,8 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
      * both the input and the output arrays are sized to accommodate the next
      * power of 2 larger than the input.
      */
-    
-     for (int twod = 1; twod < length; twod *= 2) {
+    printf("1");
+    for (int twod = 1; twod < length; twod *= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
@@ -94,12 +94,11 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             twod,
             twod1);
         cudaCheckError(cudaThreadSynchronize());
-
-     }
-
-     device_result[length - 1] = 0;
-
-     for (int twod = length / 2; twod >= 1; twod /= 2) {
+    }
+    printf("2");
+    device_result[length - 1] = 0;
+    printf("3");
+    for (int twod = length / 2; twod >= 1; twod /= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
@@ -110,8 +109,8 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             twod,
             twod1);
         cudaCheckError(cudaThreadSynchronize());
-     }
-
+    }
+    printf("4");
 }
 
 /* This function is a wrapper around the code you will write - it copies the
