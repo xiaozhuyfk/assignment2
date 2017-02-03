@@ -155,6 +155,7 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     
     cudaMemcpy(resultarray, device_result, (end - inarray) * sizeof(int),
                cudaMemcpyDeviceToHost);
+    printf("result\n");
     for (int i = 0; i < end - inarray; i++) {
         printf("%d\n", inarray[i]);
     }
