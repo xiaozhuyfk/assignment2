@@ -87,7 +87,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
     for (int twod = 1; twod < (length >> 1); twod <<= 1) {
         int twod1 = twod << 1;
         int partitions = length / twod1;
-        int threads_per_block = (partitions > 128) ? 128 : partitions;
+        int threads_per_block = (partitions > 256) ? 256 : partitions;
         int blocks = partitions / threads_per_block;
         upsweep_kernel<<<blocks, threads_per_block>>>(
             device_result, 
@@ -102,7 +102,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
     for (int twod = length >> 1; twod >= 1; twod >>= 1) {
         int twod1 = twod << 1;
         int partitions = length / twod1;
-        int threads_per_block = (partitions > 128) ? 128 : partitions;
+        int threads_per_block = (partitions > 256) ? 256 : partitions;
         int blocks = partitions / threads_per_block;
         downsweep_kernel<<<blocks, threads_per_block>>>(
             device_result,
@@ -138,7 +138,6 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     // implement an in-place scan on the result vector if you wish.
     // If you do this, you will need to keep that fact in mind when calling
     // exclusive_scan from find_repeats.
-    //cudaMemset(device_result, 0, rounded_length * sizeof(int));
     cudaMemcpy(device_result, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
 
