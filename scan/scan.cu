@@ -16,8 +16,7 @@ extern float toBW(int bytes, float sec);
 
 /* Helper function to round up to a power of 2. 
  */
-static inline int nextPow2(int n)
-{
+static inline int nextPow2(int n) {
     n--;
     n |= n >> 1;
     n |= n >> 2;
@@ -28,8 +27,31 @@ static inline int nextPow2(int n)
     return n;
 }
 
-void exclusive_scan(int* device_start, int length, int* device_result)
-{
+__global__ void upsweep_kernel(
+    int* device_result, 
+    int length, 
+    int twod, 
+    int twod1) {
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = index * twod1;
+    device_result[i + twod1 - 1] += device_result[i + twod - 1];
+}
+
+__global__ void downsweep_kernel(
+    int* device_result,
+    int length,
+    int twod,
+    int twod1) {
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = index * twod1;
+    int t = device_result[i + twod - 1];
+    device_result[i + twod - 1] = device_result[i + twod1 - 1];
+    device_result[i + twod1 - 1] += t;
+}
+
+void exclusive_scan(int* device_start, int length, int* device_result) {
     /* Fill in this function with your exclusive scan implementation.
      * You are passed the locations of the input and output in device memory,
      * but this is host code -- you will need to declare one or more CUDA 
@@ -39,14 +61,42 @@ void exclusive_scan(int* device_start, int length, int* device_result)
      * both the input and the output arrays are sized to accommodate the next
      * power of 2 larger than the input.
      */
+    
+     for (int twod = 1; twod < length; twod *= 2) {
+        int twod1 = twod * 2;
+        int partitions = length / twod1;
+        int threads_per_block = (partitions > 128) ? 128 : partitions;
+        int blocks = partitions / threads_per_block;
+        upsweep_kernel<<blocks, threads_per_block>>(
+            device_result, 
+            length,
+            twod,
+            twod1);
+        cudaThreadSynchronize();
+     }
+
+     device_result[length - 1] = 0;
+
+     for (int twod = length / 2; twod >= 1; twod /= 2) {
+        int twod1 = twod * 2;
+        int partitions = length / twod1;
+        int threads_per_block = (partitions > 128) ? 128 : partitions;
+        int blocks = partitions / threads_per_block;
+        downsweep_kernel<<blocks, threads_per_block>>(
+            device_result,
+            length,
+            twod,
+            twod1);
+        cudaThreadSynchronize();
+     }
+
 }
 
 /* This function is a wrapper around the code you will write - it copies the
  * input to the GPU and times the invocation of the exclusive_scan() function
  * above. You should not modify it.
  */
-double cudaScan(int* inarray, int* end, int* resultarray)
-{
+double cudaScan(int* inarray, int* end, int* resultarray) {
     int* device_result;
     int* device_input; 
     // We round the array sizes up to a power of 2, but elements after
@@ -124,7 +174,7 @@ int find_repeats(int *device_input, int length, int *device_output) {
      * of 2 in size, so you can use your exclusive_scan function with them if 
      * it requires that. However, you must ensure that the results of
      * find_repeats are correct given the original length.
-     */    
+     */
     return 0;
 }
 
@@ -157,8 +207,7 @@ double cudaFindRepeats(int *input, int length, int *output, int *output_length) 
     return endTime - startTime;
 }
 
-void printCudaInfo()
-{
+void printCudaInfo() {
     // for fun, just print out some stats on the machine
 
     int deviceCount = 0;
