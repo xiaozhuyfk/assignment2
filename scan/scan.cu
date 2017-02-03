@@ -118,6 +118,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
  * above. You should not modify it.
  */
 double cudaScan(int* inarray, int* end, int* resultarray) {
+    printf("cudaScan");
     int* device_result;
     int* device_input; 
     // We round the array sizes up to a power of 2, but elements after
