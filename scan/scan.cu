@@ -127,6 +127,9 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     // You may have an easier time in your implementation if you assume the 
     // array's length is a power of 2, but this will result in extra work on
     // non-power-of-2 inputs.
+    for (int i = 0; i < end - inarray; i++) {
+        printf("%d\n", inarray[i]);
+    }
     int rounded_length = nextPow2(end - inarray);
     cudaMalloc((void **)&device_result, sizeof(int) * rounded_length);
     cudaMalloc((void **)&device_input, sizeof(int) * rounded_length);
@@ -152,7 +155,9 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     
     cudaMemcpy(resultarray, device_result, (end - inarray) * sizeof(int),
                cudaMemcpyDeviceToHost);
-    printf("%d\n", resultarray[end - inarray - 1]);
+    for (int i = 0; i < end - inarray; i++) {
+        printf("%d\n", inarray[i]);
+    }
     return overallDuration;
 }
 
