@@ -137,11 +137,11 @@ int main(int argc, char** argv)
     }
 
     printCudaInfo();
-    printf("yo\n");
 
     double cudaTime = 50000.;
 
     if (test.compare("scan") == 0) { // test exclusive scan
+        printf("here?\n");
         // run CUDA implementation
         for (int i=0; i<3; i++) {
             if (useThrust)
