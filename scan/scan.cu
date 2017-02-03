@@ -99,11 +99,6 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         cudaThreadSynchronize();
     }
 
-    printf("partial.\n");
-    for (int i = 0; i < length; i++) {
-        printf("%d\n", device_result[i]);
-    }
-
     //cudaMemset(device_result + length - 1, 0, 1);
 
     /*
@@ -128,7 +123,10 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
  */
 double cudaScan(int* inarray, int* end, int* resultarray) {
     int* device_result;
-    int* device_input; 
+    int* device_input;
+    for (int i = 0; i < end - inarray; i++) {
+        printf("%d\n", inarray[i]);
+    }
     // We round the array sizes up to a power of 2, but elements after
     // the end of the original input are left uninitialized and not checked
     // for correctness. 
@@ -149,9 +147,6 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     cudaMemset(device_result, 0, rounded_length);
     cudaMemcpy(device_result, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
-    for (int i = 0; i < rounded_length; i++) {
-        printf("%d\n", device_result[i]);
-    }
 
     double startTime = CycleTimer::currentSeconds();
 
@@ -164,9 +159,10 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     
     cudaMemcpy(resultarray, device_result, (end - inarray) * sizeof(int),
                cudaMemcpyDeviceToHost);
+    
     printf("result\n");
     for (int i = 0; i < end - inarray; i++) {
-        printf("%d\n", inarray[i]);
+        printf("%d\n", resultarray[i]);
     }
     return overallDuration;
 }
