@@ -98,9 +98,9 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
 
     cudaMemset(device_result + length - 1, 0, 1);
 
-    for (int twod = length / 2; twod >= 1; twod /= 2) {
+    for (int twod = length / 2; twod > 1; twod /= 2) {
         int twod1 = twod * 2;
-        int partitions = length / twod1;
+        int partitions = length / twod;
         int threads_per_block = (partitions > 128) ? 128 : partitions;
         int blocks = partitions / threads_per_block;
         downsweep_kernel<<<blocks, threads_per_block>>>(
