@@ -14,6 +14,27 @@
 extern float toBW(int bytes, float sec);
 
 
+/*
+ * DEBUG cuda error
+ */
+#define DEBUG
+
+#ifdef DEBUG
+#define cudaCheckError(ans) { cudaAssert((ans), __FILE__, __LINE__); }
+inline void cudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr, "CUDA Error: %s at %s:%d\n", 
+        cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+#else
+#define cudaCheckError(ans) ans
+#endif
+
+
 /* Helper function to round up to a power of 2. 
  */
 static inline int nextPow2(int n) {
@@ -72,7 +93,8 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             length,
             twod,
             twod1);
-        cudaThreadSynchronize();
+        cudaCheckError(cudaThreadSynchronize());
+
      }
 
      device_result[length - 1] = 0;
@@ -87,7 +109,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             length,
             twod,
             twod1);
-        cudaThreadSynchronize();
+        cudaCheckError(cudaThreadSynchronize());
      }
 
 }
