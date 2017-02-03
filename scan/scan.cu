@@ -82,7 +82,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
      * both the input and the output arrays are sized to accommodate the next
      * power of 2 larger than the input.
      */
-    printf("1\n");
+    
     for (int twod = 1; twod < length; twod *= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
@@ -95,9 +95,12 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             twod1);
         cudaCheckError(cudaThreadSynchronize());
     }
+
+    //device_result[length - 1] = 0;
+    printf("1\n");
+    cudaMemset(device_result + length - 1, 0, 1);
     printf("2\n");
-    device_result[length - 1] = 0;
-    printf("3\n");
+
     for (int twod = length / 2; twod >= 1; twod /= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
@@ -110,7 +113,6 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             twod1);
         cudaCheckError(cudaThreadSynchronize());
     }
-    printf("4\n");
 }
 
 /* This function is a wrapper around the code you will write - it copies the
@@ -118,7 +120,6 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
  * above. You should not modify it.
  */
 double cudaScan(int* inarray, int* end, int* resultarray) {
-    printf("cudaScan\n");
     int* device_result;
     int* device_input; 
     // We round the array sizes up to a power of 2, but elements after
