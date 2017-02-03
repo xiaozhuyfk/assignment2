@@ -99,9 +99,8 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         cudaThreadSynchronize();
     }
 
-    //cudaMemset(device_result + length - 1, 0, 1);
+    cudaMemset(device_result + length - 1, 0, sizeof(int));
 
-    /*
     for (int twod = length / 2; twod >= 1; twod /= 2) {
         int twod1 = twod * 2;
         int partitions = length / twod1;
@@ -114,7 +113,6 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
             twod1);
         cudaCheckError(cudaThreadSynchronize());
     }
-    */
 }
 
 /* This function is a wrapper around the code you will write - it copies the
@@ -144,7 +142,7 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     // implement an in-place scan on the result vector if you wish.
     // If you do this, you will need to keep that fact in mind when calling
     // exclusive_scan from find_repeats.
-    cudaMemset(device_result, 0, rounded_length);
+    cudaMemset(device_result, 0, rounded_length * sizeof(int));
     cudaMemcpy(device_result, inarray, (end - inarray) * sizeof(int), 
                cudaMemcpyHostToDevice);
 
@@ -159,7 +157,7 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     
     cudaMemcpy(resultarray, device_result, (end - inarray) * sizeof(int),
                cudaMemcpyDeviceToHost);
-    
+
     printf("result\n");
     for (int i = 0; i < end - inarray; i++) {
         printf("%d\n", resultarray[i]);
