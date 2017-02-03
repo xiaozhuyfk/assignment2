@@ -96,10 +96,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
         cudaCheckError(cudaThreadSynchronize());
     }
 
-    //device_result[length - 1] = 0;
-    printf("1\n");
     cudaMemset(device_result + length - 1, 0, 1);
-    printf("2\n");
 
     for (int twod = length / 2; twod >= 1; twod /= 2) {
         int twod1 = twod * 2;
