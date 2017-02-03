@@ -54,6 +54,7 @@ __global__ void upsweep_kernel(
     int twod, 
     int twod1) {
 
+    printf("really?\n");
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int i = index * twod1;
     device_result[i + twod1 - 1] += device_result[i + twod - 1];
