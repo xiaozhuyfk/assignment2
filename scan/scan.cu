@@ -58,8 +58,6 @@ __global__ void upsweep_kernel(
     int i = index * twod1;
 
     device_result[i + twod1 - 1] += device_result[i + twod - 1];
-    printf("%d, %d, %d, %d, %d\n", i, i+twod-1, i+twod1-1, 
-        device_result[i+twod1-1], device_result[i+twod-1]);
 }
 
 __global__ void downsweep_kernel(
@@ -122,9 +120,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
 double cudaScan(int* inarray, int* end, int* resultarray) {
     int* device_result;
     int* device_input;
-    for (int i = 0; i < end - inarray; i++) {
-        printf("%d\n", inarray[i]);
-    }
+    
     // We round the array sizes up to a power of 2, but elements after
     // the end of the original input are left uninitialized and not checked
     // for correctness. 
@@ -158,10 +154,6 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
     cudaMemcpy(resultarray, device_result, (end - inarray) * sizeof(int),
                cudaMemcpyDeviceToHost);
 
-    printf("result\n");
-    for (int i = 0; i < end - inarray; i++) {
-        printf("%d\n", resultarray[i]);
-    }
     return overallDuration;
 }
 
