@@ -317,8 +317,11 @@ __global__ void kernelAdvanceSnowflake() {
 // given a pixel and a circle, determines the contribution to the
 // pixel from the circle.  Update of the image is done in this
 // function.  Called by kernelRenderCircles()
-__device__ __inline__ void
-shadePixel(int circleIndex, float2 pixelCenter, float3 p, float4* imagePtr) {
+__device__ __inline__ void shadePixel(
+    int circleIndex, 
+    float2 pixelCenter, 
+    float3 p, 
+    float4* imagePtr) {
 
     float diffX = p.x - pixelCenter.x;
     float diffY = p.y - pixelCenter.y;
@@ -393,7 +396,7 @@ __global__ void kernelRenderCircles() {
 
     // read position and radius
     float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
-    float  rad = cuConstRendererParams.radius[index];
+    float rad = cuConstRendererParams.radius[index];
 
     // compute the bounding box of the circle. The bound is in integer
     // screen coordinates, so it's clamped to the edges of the screen.
@@ -424,6 +427,8 @@ __global__ void kernelRenderCircles() {
         }
     }
 }
+
+// TODO (hongyul): ???
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -466,8 +471,7 @@ CudaRenderer::~CudaRenderer() {
     }
 }
 
-const Image*
-CudaRenderer::getImage() {
+const Image* CudaRenderer::getImage() {
 
     // need to copy contents of the rendered image from device memory
     // before we expose the Image object to the caller
@@ -482,14 +486,12 @@ CudaRenderer::getImage() {
     return image;
 }
 
-void
-CudaRenderer::loadScene(SceneName scene) {
+void CudaRenderer::loadScene(SceneName scene) {
     sceneName = scene;
     loadCircleScene(sceneName, numCircles, position, velocity, color, radius);
 }
 
-void
-CudaRenderer::setup() {
+void CudaRenderer::setup() {
 
     int deviceCount = 0;
     std::string name;
@@ -572,15 +574,13 @@ CudaRenderer::setup() {
     };
 
     cudaMemcpyToSymbol(cuConstColorRamp, lookupTable, sizeof(float) * 3 * COLOR_MAP_SIZE);
-
 }
 
 // allocOutputImage --
 //
 // Allocate buffer the renderer will render into.  Check status of
 // image first to avoid memory leak.
-void
-CudaRenderer::allocOutputImage(int width, int height) {
+void CudaRenderer::allocOutputImage(int width, int height) {
 
     if (image)
         delete image;
@@ -591,8 +591,7 @@ CudaRenderer::allocOutputImage(int width, int height) {
 //
 // Clear's the renderer's target image.  The state of the image after
 // the clear depends on the scene being rendered.
-void
-CudaRenderer::clearImage() {
+void CudaRenderer::clearImage() {
 
     // 256 threads per block is a healthy number
     dim3 blockDim(16, 16, 1);
@@ -612,8 +611,7 @@ CudaRenderer::clearImage() {
 //
 // Advance the simulation one time step.  Updates all circle positions
 // and velocities
-void
-CudaRenderer::advanceAnimation() {
+void CudaRenderer::advanceAnimation() {
      // 256 threads per block is a healthy number
     dim3 blockDim(256, 1);
     dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
@@ -631,8 +629,7 @@ CudaRenderer::advanceAnimation() {
     cudaDeviceSynchronize();
 }
 
-void
-CudaRenderer::render() {
+void CudaRenderer::render() {
 
     // 256 threads per block is a healthy number
     dim3 blockDim(256, 1);

@@ -49,9 +49,9 @@ static inline int nextPow2(int n) {
 }
 
 __global__ void upsweep_kernel(
-    int* device_result, 
-    int length, 
-    int twod, 
+    int *device_result,
+    int length,
+    int twod,
     int twod1) {
 
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -61,7 +61,7 @@ __global__ void upsweep_kernel(
 }
 
 __global__ void downsweep_kernel(
-    int* device_result,
+    int *device_result,
     int length,
     int twod,
     int twod1) {
@@ -73,7 +73,7 @@ __global__ void downsweep_kernel(
     device_result[i + twod1 - 1] += t;
 }
 
-void exclusive_scan(int* device_start, int length, int* device_result) {
+void exclusive_scan(int *device_start, int length, int *device_result) {
     /* Fill in this function with your exclusive scan implementation.
      * You are passed the locations of the input and output in device memory,
      * but this is host code -- you will need to declare one or more CUDA 
@@ -117,7 +117,7 @@ void exclusive_scan(int* device_start, int length, int* device_result) {
  * input to the GPU and times the invocation of the exclusive_scan() function
  * above. You should not modify it.
  */
-double cudaScan(int* inarray, int* end, int* resultarray) {
+double cudaScan(int *inarray, int *end, int *resultarray) {
     int* device_result;
     int* device_input;
 
@@ -162,7 +162,7 @@ double cudaScan(int* inarray, int* end, int* resultarray) {
  * You are not expected to produce competitive performance to the
  * Thrust version.
  */
-double cudaScanThrust(int* inarray, int* end, int* resultarray) {
+double cudaScanThrust(int *inarray, int *end, int *resultarray) {
 
     int length = end - inarray;
     thrust::device_ptr<int> d_input = thrust::device_malloc<int>(length);
@@ -186,6 +186,24 @@ double cudaScanThrust(int* inarray, int* end, int* resultarray) {
     return overallDuration;
 }
 
+__global__ void check_repeats_kernel(
+    int *device_input,
+    int length,
+    int *device_output) {
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index >= length - 1) {
+        device_output[index] = 0;
+    } else {
+        device_output[index] = (device_input[index] == device_input[index+1]);
+    }
+}
+
+__global__ void find_repeats_kernel(
+    int *) {
+
+}
+
 int find_repeats(int *device_input, int length, int *device_output) {
     /* Finds all pairs of adjacent repeated elements in the list, storing the
      * indices of the first element of each pair (in order) into device_result.
@@ -198,6 +216,9 @@ int find_repeats(int *device_input, int length, int *device_output) {
      * it requires that. However, you must ensure that the results of
      * find_repeats are correct given the original length.
      */
+    int rounded_length = nextPow2(length);
+    const int threads_per_block = (length > 512) ? 512 : length;
+    const int blocks = (length + threads_per_block - 1) / threads_per_block;
     return 0;
 }
 
