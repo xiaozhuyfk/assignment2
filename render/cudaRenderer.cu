@@ -636,9 +636,9 @@ void CudaRenderer::advanceAnimation() {
 void CudaRenderer::render() {
 
     // 256 threads per block is a healthy number
-    dim3 blockDim(1, 1);
+    dim3 blockDim(256, 1);
     dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
 
-    kernelRenderCircles<<<gridDim, blockDim>>>();
+    kernelRenderCircles<<<1, 1>>>();
     cudaDeviceSynchronize();
 }
