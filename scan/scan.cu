@@ -84,6 +84,7 @@ void exclusive_scan(int *device_start, int length, int *device_result) {
      * power of 2 larger than the input.
      */
     
+    // upsweep phase
     for (int twod = 1; twod < (length >> 1); twod <<= 1) {
         int twod1 = twod << 1;
         int partitions = length / twod1;
@@ -96,9 +97,9 @@ void exclusive_scan(int *device_start, int length, int *device_result) {
             twod1);
         cudaThreadSynchronize();
     }
-
     cudaMemset(device_result + length - 1, 0, sizeof(int));
 
+    // downsweep phase    
     for (int twod = length >> 1; twod >= 1; twod >>= 1) {
         int twod1 = twod << 1;
         int partitions = length / twod1;
@@ -188,20 +189,26 @@ double cudaScanThrust(int *inarray, int *end, int *resultarray) {
 
 __global__ void check_repeats_kernel(
     int *device_input,
-    int length,
-    int *device_output) {
+    int length) {
 
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index >= length - 1) {
-        device_output[index] = 0;
+        device_input[index] = 0;
     } else {
-        device_output[index] = (device_input[index] == device_input[index+1]);
+        device_input[index] = (device_input[index] == device_input[index+1]);
     }
 }
 
 __global__ void find_repeats_kernel(
-    int *) {
+    int *device_input,
+    int length,
+    int *device_output) {
 
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < length - 1 &&
+        device_input[index] != device_input[index + 1]) {
+        device_output[device_input[index]] = index;
+    }
 }
 
 int find_repeats(int *device_input, int length, int *device_output) {
@@ -219,7 +226,25 @@ int find_repeats(int *device_input, int length, int *device_output) {
     int rounded_length = nextPow2(length);
     const int threads_per_block = (length > 512) ? 512 : length;
     const int blocks = (length + threads_per_block - 1) / threads_per_block;
-    return 0;
+
+    check_repeats_kernel<<<blocks, threads_per_block>>>(device_input, length);
+    cudaThreadSynchronize();
+
+    exclusive_scan(NULL, rounded_length, device_input);
+
+    find_repeats_kernel<<<blocks, threads_per_block>>>(
+        device_input, length, device_output);
+    cudaThreadSynchronize();
+
+    // the last element of the scan result is the number of pairs found.
+    int *result = (int *) malloc(sizeof(int));
+    cudaMemcpy(
+        result, 
+        device_input + length - 1, 
+        sizeof(int), 
+        cudaMemcpyDeviceToHost);
+
+    return *result;
 }
 
 /* Timing wrapper around find_repeats. You should not modify this function.
