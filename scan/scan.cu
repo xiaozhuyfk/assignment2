@@ -230,6 +230,8 @@ int find_repeats(int *device_input, int length, int *device_output) {
     check_repeats_kernel<<<blocks, threads_per_block>>>(device_input, length);
     cudaThreadSynchronize();
 
+    // compute the prefix sum of the repeat identifier list
+    // the prefix sum changes means that a new pair of repeat is found
     exclusive_scan(NULL, rounded_length, device_input);
 
     find_repeats_kernel<<<blocks, threads_per_block>>>(
