@@ -48,6 +48,9 @@ __constant__ float  cuConstNoise1DValueTable[256];
 
 // color ramp table needed for the color ramp lookup shader
 #define COLOR_MAP_SIZE 5
+#define BLOCKX 16
+#define BLOCKY 16
+#define THREADS_PER_BLK (BLOCKX * BLOCKY)
 __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 
 
@@ -55,6 +58,7 @@ __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 // file simpler and to seperate code that should not be modified
 #include "noiseCuda.cu_inl"
 #include "lookupColor.cu_inl"
+#include "circleBoxTest.cu_inl"
 
 
 // kernelClearImageSnowflake -- (CUDA device code)
@@ -432,7 +436,80 @@ __global__ void kernelRenderCircles() {
     }
 }
 
-// TODO (hongyul): ???
+// kernelRenderBlocks -- (CUDA device code)
+//
+// Each thread renders a pixel
+__global__ void kernelRenderBlocks() {
+
+    int imageX = blockIdx.x * blockDim.x + threadIdx.x;
+    int imageY = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int width = cuConstRendererParams.imageWidth;
+    int height = cuConstRendererParams.imageHeight;
+
+    if (imageX >= width || imageY >= height)
+        return;
+
+    int offset = 4 * (imageY * width + imageX);
+    float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[offset]);
+
+    float invWidth = 1.f / width;
+    float invHeight = 1.f / height;
+
+    float boxL = (float)(blockIdx.x * blockDim.x)/width;
+    float boxR = (float)((blockIdx.x+1) * blockDim.x)/width;
+    float boxB = (float)(blockIdx.y * blockDim.y)/height;
+    float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;
+
+    for (int circleIndex= threadIdx.y * blockDim.x+threadIdx.x; 
+            circleIndex<cuConstRendererParams.numCircles; 
+            circleIndex+=THREADS_PER_BLK){
+        int iter_count = circleIndex / THREADS_PER_BLK;
+
+        __shared__ int support[THREADS_PER_BLK];     
+
+        if (circleIndex<cuConstRendererParams.numCircles){ //check circle index in-bound
+            int index3_circ = 3 * circleIndex;
+            float3 p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
+            float rad = cuConstRendererParams.radius[circleIndex];
+            //printf("%f %f %f\n", p_circ.x, p_circ.y, rad);
+            //printf("%f %f %f %f\n", boxL,boxR,boxB,boxT);
+            //support[circleIndex] = (circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB)==1) ? circleIndex : -1;
+            support[circleIndex] = circleIndex;
+        } else {
+            support[circleIndex] = -1;
+            //printf("%d find %d\n", threadIdx.y*blockDim.x+threadIdx.x, circleIndex);
+        }
+
+        __syncthreads();
+        //printf("%d find %d\n", threadIdx.y*blockDim.x+threadIdx.x, support[0]);*/
+
+        for (int validCircleIndex=0; validCircleIndex<THREADS_PER_BLK; validCircleIndex++){
+            if (circleIndex < cuConstRendererParams.numCircles){
+            //if (validCircleIndex < cuConstRendererParams.numCircles){
+
+                //printf("%d\n", validCircleIndex);
+            //if (support[validCircleIndex]>-1){
+                //printf("find %d %d\n", validCircleIndex,validCircleIndex+iter_count*THREADS_PER_BLK);
+                
+                int index3 = 3 * (circleIndex);
+                //int index3 = 3 * (validCircleIndex);
+                //int index3 = 3 * (validCircleIndex+iter_count*THREADS_PER_BLK);
+
+                // read position and radius
+                float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
+                float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
+                                                     invHeight * (static_cast<float>(imageY) + 0.5f));
+
+                
+                shadePixel(circleIndex, pixelCenterNorm, p, imgPtr);
+                //shadePixel(validCircleIndex, pixelCenterNorm, p, imgPtr);
+                //shadePixel(validCircleIndex+iter_count*THREADS_PER_BLK, pixelCenterNorm, p, imgPtr);
+            } 
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -634,11 +711,12 @@ void CudaRenderer::advanceAnimation() {
 }
 
 void CudaRenderer::render() {
-
     // 256 threads per block is a healthy number
-    dim3 blockDim(256, 1);
-    dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
+    dim3 blockDim(BLOCKX, BLOCKY, 1);
+    dim3 gridDim(
+        (image->width + blockDim.x - 1) / blockDim.x,
+        (image->height + blockDim.y - 1) / blockDim.y);
 
-    kernelRenderCircles<<<gridDim, blockDim>>>();
+    kernelRenderBlocks<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
 }
