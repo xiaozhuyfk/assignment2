@@ -48,6 +48,11 @@ __constant__ float  cuConstNoise1DValueTable[256];
 
 // color ramp table needed for the color ramp lookup shader
 #define COLOR_MAP_SIZE 5
+#define BLOCKX 16
+#define BLOCKY 16
+#define THREADS_PER_BLK (BLOCKX * BLOCKY)
+#define SCAN_BLOCK_DIM  (BLOCKX * BLOCKY) // needed by sharedMemExclusiveScan implementation
+
 __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 
 
@@ -55,7 +60,8 @@ __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 // file simpler and to seperate code that should not be modified
 #include "noiseCuda.cu_inl"
 #include "lookupColor.cu_inl"
-
+#include "circleBoxTest.cu_inl"
+#include "exclusiveScan.cu_inl"
 
 // kernelClearImageSnowflake -- (CUDA device code)
 //
@@ -436,6 +442,10 @@ __global__ void kernelRenderCircles() {
 //
 // Each thread renders a pixel
 __global__ void kernelRenderBlocks() {
+    __shared__ uint scanInput[THREADS_PER_BLK]; 
+    __shared__ uint scanOutput[THREADS_PER_BLK];
+    __shared__ uint scanScratch[2 * THREADS_PER_BLK];
+    __shared__ int circleInBlock[THREADS_PER_BLK];
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -449,17 +459,60 @@ __global__ void kernelRenderBlocks() {
     int offset = 4 * (imageY * width + imageX);
     float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[offset]);
 
-    float invWidth = 1.f / cuConstRendererParams.imageWidth;
-    float invHeight = 1.f / cuConstRendererParams.imageHeight;
+    float invWidth = 1.f / width;
+    float invHeight = 1.f / height;
 
-    for (int circleIndex=0; circleIndex<cuConstRendererParams.numCircles; circleIndex++){
-        int index3 = 3 * circleIndex;
+    float boxL = (float)(blockIdx.x * blockDim.x)/width;
+    float boxR = (float)((blockIdx.x+1) * blockDim.x)/width;
+    float boxB = (float)(blockIdx.y * blockDim.y)/height;
+    float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;
 
-        // read position and radius
-        float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
-        float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
-                                                 invHeight * (static_cast<float>(imageY) + 0.5f));
-        shadePixel(circleIndex, pixelCenterNorm, p, imgPtr);
+    int linearThreadIndex = threadIdx.y * blockDim.x+threadIdx.x;
+
+    //The loop guard ensures all threads will enter the for loop, no matter whether it corresponds to a circle
+    //Example of possible thread_iter value: 0, 256, 512,...
+    for (int thread_iter= 0; thread_iter<cuConstRendererParams.numCircles; thread_iter+=THREADS_PER_BLK){
+
+        //Each thread is assigned to a circleIndex, whether exists or not
+        int circleIndex = thread_iter + linearThreadIndex;
+
+        if (circleIndex<cuConstRendererParams.numCircles){ //check circle index in-bound
+            int index3_circ = 3 * circleIndex;
+            float3 p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
+            float rad = cuConstRendererParams.radius[circleIndex];
+            scanInput[linearThreadIndex] = (circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB)) ? 1:0;
+        } else {
+            scanInput[linearThreadIndex] = 0;
+        }
+
+        __syncthreads();
+
+        // Exclusive scan
+        sharedMemExclusiveScan(linearThreadIndex, scanInput, scanOutput, scanScratch, THREADS_PER_BLK);
+        __syncthreads();
+        // See if last circle in thread block is in block region
+        int num_circle_in_block = scanInput[THREADS_PER_BLK-1] ? scanOutput[THREADS_PER_BLK-1]+1 : scanOutput[THREADS_PER_BLK-1];
+        
+        
+        if (scanInput[linearThreadIndex]){
+            // Scan output index is off by 1
+            int circleInBlockIdx = (linearThreadIndex == THREADS_PER_BLK-1)?  scanOutput[THREADS_PER_BLK-1]: scanOutput[linearThreadIndex+1]-1; 
+            // Push all circle in block region forward
+            circleInBlock[circleInBlockIdx] = linearThreadIndex;
+        }
+        __syncthreads();
+
+        //printf("%d find %d\n", threadIdx.y*blockDim.x+threadIdx.x, support[0]);*/
+        for (int i=0; i < num_circle_in_block; i++){               
+                int index3 = 3 * (circleInBlock[i] + thread_iter);
+
+                // read position and radius
+                float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
+                float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
+                                                     invHeight * (static_cast<float>(imageY) + 0.5f));
+                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, imgPtr);
+        }
+        __syncthreads();
     }
 }
 
@@ -665,13 +718,11 @@ void CudaRenderer::advanceAnimation() {
 
 void CudaRenderer::render() {
     // 256 threads per block is a healthy number
-    dim3 blockDim(16, 16, 1);
+    dim3 blockDim(BLOCKX, BLOCKY, 1);
     dim3 gridDim(
         (image->width + blockDim.x - 1) / blockDim.x,
         (image->height + blockDim.y - 1) / blockDim.y);
-    //dim3 gridDim((numCircles + blockDim.x - 1) / blockDim.x);
 
-    //kernelRenderCircles<<<gridDim, blockDim>>>();
     kernelRenderBlocks<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
 }
