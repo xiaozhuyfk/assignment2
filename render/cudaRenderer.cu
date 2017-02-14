@@ -51,6 +51,8 @@ __constant__ float  cuConstNoise1DValueTable[256];
 #define BLOCKX 16
 #define BLOCKY 16
 #define THREADS_PER_BLK (BLOCKX * BLOCKY)
+#define SCAN_BLOCK_DIM  (BLOCKX * BLOCKY) // needed by sharedMemExclusiveScan implementation
+
 __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 
 
@@ -59,7 +61,7 @@ __constant__ float  cuConstColorRamp[COLOR_MAP_SIZE][3];
 #include "noiseCuda.cu_inl"
 #include "lookupColor.cu_inl"
 #include "circleBoxTest.cu_inl"
-
+#include "exclusiveScan.cu_inl"
 
 // kernelClearImageSnowflake -- (CUDA device code)
 //
@@ -440,7 +442,10 @@ __global__ void kernelRenderCircles() {
 //
 // Each thread renders a pixel
 __global__ void kernelRenderBlocks() {
-    __shared__ int support[THREADS_PER_BLK]; 
+    __shared__ uint scanInput[THREADS_PER_BLK]; 
+    __shared__ uint scanOutput[THREADS_PER_BLK];
+    __shared__ uint scanScratch[2 * THREADS_PER_BLK];
+    __shared__ int circleInBlock[THREADS_PER_BLK];
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -462,54 +467,50 @@ __global__ void kernelRenderBlocks() {
     float boxB = (float)(blockIdx.y * blockDim.y)/height;
     float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;
 
-    int circle_offset = threadIdx.y * blockDim.x+threadIdx.x;
+    int linearThreadIndex = threadIdx.y * blockDim.x+threadIdx.x;
 
     //The loop guard ensures all threads will enter the for loop, no matter whether it corresponds to a circle
     //Example of possible thread_iter value: 0, 256, 512,...
     for (int thread_iter= 0; thread_iter<cuConstRendererParams.numCircles; thread_iter+=THREADS_PER_BLK){
 
         //Each thread is assigned to a circleIndex, whether exists or not
-        int circleIndex = thread_iter + circle_offset;
-        
-        //printf("%d %d %d\n",circleIndex,threadIdx.x, threadIdx.y);
+        int circleIndex = thread_iter + linearThreadIndex;
 
         if (circleIndex<cuConstRendererParams.numCircles){ //check circle index in-bound
             int index3_circ = 3 * circleIndex;
             float3 p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
             float rad = cuConstRendererParams.radius[circleIndex];
-            //printf("%f %f %f\n", p_circ.x, p_circ.y, rad);
-            //printf("%f %f %f %f\n", boxL,boxR,boxB,boxT);
-            support[circle_offset] = (circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB)) ? circleIndex : -1;
+            scanInput[linearThreadIndex] = (circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB)) ? 1:0;
         } else {
-            support[circle_offset] = -1;
+            scanInput[linearThreadIndex] = 0;
         }
 
         __syncthreads();
+
+        // Exclusive scan
+        sharedMemExclusiveScan(linearThreadIndex, scanInput, scanOutput, scanScratch, THREADS_PER_BLK);
+        __syncthreads();
+        // See if last circle in thread block is in block region
+        int num_circle_in_block = scanInput[THREADS_PER_BLK-1] ? scanOutput[THREADS_PER_BLK-1]+1 : scanOutput[THREADS_PER_BLK-1];
+        
+        
+        if (scanInput[linearThreadIndex]){
+            // Scan output index is off by 1
+            int circleInBlockIdx = (linearThreadIndex == THREADS_PER_BLK-1)?  scanOutput[THREADS_PER_BLK-1]: scanOutput[linearThreadIndex+1]-1; 
+            // Push all circle in block region forward
+            circleInBlock[circleInBlockIdx] = linearThreadIndex;
+        }
+        __syncthreads();
+
         //printf("%d find %d\n", threadIdx.y*blockDim.x+threadIdx.x, support[0]);*/
-
-        for (int validCircleIndex=0; validCircleIndex<THREADS_PER_BLK; validCircleIndex++){
-            //if (circleIndex < cuConstRendererParams.numCircles){
-            //if (validCircleIndex < cuConstRendererParams.numCircles){
-
-                //printf("%d\n", validCircleIndex);
-            if (validCircleIndex < cuConstRendererParams.numCircles - thread_iter and support[validCircleIndex]>-1){
-                //printf("find %d %d\n", validCircleIndex,circleIndex);
-                //printf("find %d\n", thread_iter);
-                
-                //int index3 = 3 * (circleIndex);
-                //int index3 = 3 * (validCircleIndex);
-                int index3 = 3 * (validCircleIndex + thread_iter);
+        for (int i=0; i < num_circle_in_block; i++){               
+                int index3 = 3 * (circleInBlock[i] + thread_iter);
 
                 // read position and radius
                 float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
                                                      invHeight * (static_cast<float>(imageY) + 0.5f));
-
-                
-                //shadePixel(circleIndex, pixelCenterNorm, p, imgPtr);
-                //shadePixel(validCircleIndex, pixelCenterNorm, p, imgPtr);
-                shadePixel(validCircleIndex+thread_iter,pixelCenterNorm, p, imgPtr);
-            } 
+                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, imgPtr);
         }
         __syncthreads();
     }
