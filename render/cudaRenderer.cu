@@ -446,6 +446,7 @@ __global__ void kernelRenderBlocks() {
     __shared__ uint scanOutput[THREADS_PER_BLK];
     __shared__ uint scanScratch[2 * THREADS_PER_BLK];
     __shared__ int circleInBlock[THREADS_PER_BLK];
+    //__shared__ float4 imgDataBlock[THREADS_PER_BLK];
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -456,8 +457,14 @@ __global__ void kernelRenderBlocks() {
     if (imageX >= width || imageY >= height)
         return;
 
+    int linearThreadIndex = threadIdx.y * blockDim.x+threadIdx.x;
+
     int offset = 4 * (imageY * width + imageX);
-    float4* imgPtr = (float4*)(&cuConstRendererParams.imageData[offset]);
+
+    //new things
+    //imgDataBlock[linearThreadIndex] = *(float4*)(&cuConstRendererParams.imageData[offset]);
+    //float4* imgPtr = (float4*)(&imgDataBlock[linearThreadIndex]);
+    float4 imgPtr = *(float4*)(&cuConstRendererParams.imageData[offset]);
 
     float invWidth = 1.f / width;
     float invHeight = 1.f / height;
@@ -467,7 +474,7 @@ __global__ void kernelRenderBlocks() {
     float boxB = (float)(blockIdx.y * blockDim.y)/height;
     float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;
 
-    int linearThreadIndex = threadIdx.y * blockDim.x+threadIdx.x;
+    
 
     //The loop guard ensures all threads will enter the for loop, no matter whether it corresponds to a circle
     //Example of possible thread_iter value: 0, 256, 512,...
@@ -510,10 +517,13 @@ __global__ void kernelRenderBlocks() {
                 float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
                 float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
                                                      invHeight * (static_cast<float>(imageY) + 0.5f));
-                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, imgPtr);
+                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, &imgPtr);
         }
-        __syncthreads();
     }
+    *(float4*)(&cuConstRendererParams.imageData[offset]) = imgPtr;
+    //if (!threadIdx.x and !threadIdx.y){
+    //    image[];
+    //}
 }
 
 
