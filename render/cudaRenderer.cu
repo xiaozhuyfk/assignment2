@@ -446,7 +446,16 @@ __global__ void kernelRenderBlocks() {
     __shared__ uint scanOutput[THREADS_PER_BLK];
     __shared__ uint scanScratch[2 * THREADS_PER_BLK];
     __shared__ int circleInBlock[THREADS_PER_BLK];
-    //__shared__ float4 imgDataBlock[THREADS_PER_BLK];
+
+    int index3_circ;
+    float3 p_circ;
+    float rad;
+    int circleIndex;
+    int index3;
+    // read position and radius
+    float3 p;
+    float2 pixelCenterNorm;
+    int num_circle_in_block;
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -461,9 +470,6 @@ __global__ void kernelRenderBlocks() {
 
     int offset = 4 * (imageY * width + imageX);
 
-    //new things
-    //imgDataBlock[linearThreadIndex] = *(float4*)(&cuConstRendererParams.imageData[offset]);
-    //float4* imgPtr = (float4*)(&imgDataBlock[linearThreadIndex]);
     float4 imgPtr = *(float4*)(&cuConstRendererParams.imageData[offset]);
 
     float invWidth = 1.f / width;
@@ -472,33 +478,28 @@ __global__ void kernelRenderBlocks() {
     float boxL = (float)(blockIdx.x * blockDim.x)/width;
     float boxR = (float)((blockIdx.x+1) * blockDim.x)/width;
     float boxB = (float)(blockIdx.y * blockDim.y)/height;
-    float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;
-
-    
+    float boxT = (float)((blockIdx.y+1) * blockDim.y)/height;    
 
     //The loop guard ensures all threads will enter the for loop, no matter whether it corresponds to a circle
     //Example of possible thread_iter value: 0, 256, 512,...
     for (int thread_iter= 0; thread_iter<cuConstRendererParams.numCircles; thread_iter+=THREADS_PER_BLK){
 
+        scanInput[linearThreadIndex] = 0;
         //Each thread is assigned to a circleIndex, whether exists or not
-        int circleIndex = thread_iter + linearThreadIndex;
+        circleIndex = thread_iter + linearThreadIndex;
 
         if (circleIndex<cuConstRendererParams.numCircles){ //check circle index in-bound
-            int index3_circ = 3 * circleIndex;
-            float3 p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
-            float rad = cuConstRendererParams.radius[circleIndex];
-            scanInput[linearThreadIndex] = (circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB)) ? 1:0;
-        } else {
-            scanInput[linearThreadIndex] = 0;
+            index3_circ = 3 * circleIndex;
+            p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
+            rad = cuConstRendererParams.radius[circleIndex];
+            scanInput[linearThreadIndex] = circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB);
         }
-
-        __syncthreads();
 
         // Exclusive scan
         sharedMemExclusiveScan(linearThreadIndex, scanInput, scanOutput, scanScratch, THREADS_PER_BLK);
         __syncthreads();
         // See if last circle in thread block is in block region
-        int num_circle_in_block = scanInput[THREADS_PER_BLK-1] ? scanOutput[THREADS_PER_BLK-1]+1 : scanOutput[THREADS_PER_BLK-1];
+        num_circle_in_block = scanOutput[THREADS_PER_BLK-1]+scanInput[THREADS_PER_BLK-1];
         
         
         if (scanInput[linearThreadIndex]){
@@ -509,21 +510,17 @@ __global__ void kernelRenderBlocks() {
         }
         __syncthreads();
 
-        //printf("%d find %d\n", threadIdx.y*blockDim.x+threadIdx.x, support[0]);*/
         for (int i=0; i < num_circle_in_block; i++){               
-                int index3 = 3 * (circleInBlock[i] + thread_iter);
+                index3 = 3 * (circleInBlock[i] + thread_iter);
 
                 // read position and radius
-                float3 p = *(float3*)(&cuConstRendererParams.position[index3]);
-                float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
+                p = *(float3*)(&cuConstRendererParams.position[index3]);
+                pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
                                                      invHeight * (static_cast<float>(imageY) + 0.5f));
                 shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, &imgPtr);
         }
     }
     *(float4*)(&cuConstRendererParams.imageData[offset]) = imgPtr;
-    //if (!threadIdx.x and !threadIdx.y){
-    //    image[];
-    //}
 }
 
 
