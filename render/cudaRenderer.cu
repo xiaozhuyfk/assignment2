@@ -327,13 +327,13 @@ __device__ __inline__ void shadePixel(
     int circleIndex, 
     float2 pixelCenter, 
     float3 p, 
-    float4* imagePtr) {
+    float4* imagePtr,
+    float rad) {
 
     float diffX = p.x - pixelCenter.x;
     float diffY = p.y - pixelCenter.y;
     float pixelDist = diffX * diffX + diffY * diffY;
 
-    float rad = cuConstRendererParams.radius[circleIndex];;
     float maxDist = rad * rad;
 
     // circle does not contribute to the image
@@ -432,7 +432,7 @@ __global__ void kernelRenderCircles() {
         for (int pixelX=screenMinX; pixelX<screenMaxX; pixelX++) {
             float2 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(pixelX) + 0.5f),
                                                  invHeight * (static_cast<float>(pixelY) + 0.5f));
-            shadePixel(index, pixelCenterNorm, p, imgPtr);
+            shadePixel(index, pixelCenterNorm, p, imgPtr, rad);
             imgPtr++;
         }
     }
@@ -446,6 +446,7 @@ __global__ void kernelRenderBlocks() {
     __shared__ uint scanOutput[THREADS_PER_BLK];
     __shared__ uint scanScratch[2 * THREADS_PER_BLK];
     __shared__ int circleInBlock[THREADS_PER_BLK];
+    __shared__ float radiusShared[THREADS_PER_BLK];
 
     int index3_circ;
     float3 p_circ;
@@ -492,11 +493,15 @@ __global__ void kernelRenderBlocks() {
             index3_circ = 3 * circleIndex;
             p_circ = *(float3*)(&cuConstRendererParams.position[index3_circ]);
             rad = cuConstRendererParams.radius[circleIndex];
+
+            radiusShared[linearThreadIndex] = rad;
+
             scanInput[linearThreadIndex] = circleInBoxConservative(p_circ.x, p_circ.y, rad, boxL,boxR,boxT,boxB);
         }
 
         // Exclusive scan
         sharedMemExclusiveScan(linearThreadIndex, scanInput, scanOutput, scanScratch, THREADS_PER_BLK);
+        // Sync scanOutput
         __syncthreads();
         // See if last circle in thread block is in block region
         num_circle_in_block = scanOutput[THREADS_PER_BLK-1]+scanInput[THREADS_PER_BLK-1];
@@ -508,6 +513,7 @@ __global__ void kernelRenderBlocks() {
             // Push all circle in block region forward
             circleInBlock[circleInBlockIdx] = linearThreadIndex;
         }
+        // Sync circleInBlock
         __syncthreads();
 
         for (int i=0; i < num_circle_in_block; i++){               
@@ -517,8 +523,10 @@ __global__ void kernelRenderBlocks() {
                 p = *(float3*)(&cuConstRendererParams.position[index3]);
                 pixelCenterNorm = make_float2(invWidth * (static_cast<float>(imageX) + 0.5f),
                                                      invHeight * (static_cast<float>(imageY) + 0.5f));
-                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, &imgPtr);
+                shadePixel(circleInBlock[i]+thread_iter,pixelCenterNorm, p, &imgPtr,radiusShared[circleInBlock[i]]);
         }
+        // Sync radiusShared to prevent the data to be modified in a new iteration
+        __syncthreads();
     }
     *(float4*)(&cuConstRendererParams.imageData[offset]) = imgPtr;
 }
